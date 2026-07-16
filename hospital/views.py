@@ -9,6 +9,15 @@ from datetime import datetime,timedelta,date
 from django.conf import settings
 from django.db.models import Q
 
+#-----------for checking user is doctor , patient or admin(by sumit)
+def is_admin(user):
+    return user.groups.filter(name='ADMIN').exists()
+def is_doctor(user):
+    return user.groups.filter(name='DOCTOR').exists()
+def is_patient(user):
+    return user.groups.filter(name='PATIENT').exists()
+
+
 # Create your views here.
 def home_view(request):
     if request.user.is_authenticated:
@@ -39,6 +48,8 @@ def patientclick_view(request):
 
 
 
+@login_required(login_url='adminlogin')
+@user_passes_test(is_admin)
 def admin_signup_view(request):
     form=forms.AdminSigupForm()
     if request.method=='POST':
@@ -101,12 +112,6 @@ def patient_signup_view(request):
 
 
 #-----------for checking user is doctor , patient or admin(by sumit)
-def is_admin(user):
-    return user.groups.filter(name='ADMIN').exists()
-def is_doctor(user):
-    return user.groups.filter(name='DOCTOR').exists()
-def is_patient(user):
-    return user.groups.filter(name='PATIENT').exists()
 
 
 #---------AFTER ENTERING CREDENTIALS WE CHECK WHETHER USERNAME AND PASSWORD IS OF ADMIN,DOCTOR OR PATIENT
@@ -432,6 +437,7 @@ def discharge_patient_view(request,pk):
         pDD=models.PatientDischargeDetails()
         pDD.patientId=pk
         pDD.patientName=patient.get_name
+        pDD.assignedDoctorId=patient.assignedDoctorId
         pDD.assignedDoctorName=assignedDoctor[0].first_name
         pDD.address=patient.address
         pDD.mobile=patient.mobile
@@ -469,7 +475,12 @@ def render_to_pdf(template_src, context_dict):
 
 
 
+@login_required(login_url='patientlogin')
 def download_pdf_view(request,pk):
+    if not is_admin(request.user):
+        patient=models.Patient.objects.filter(user_id=request.user.id).first()
+        if patient is None or patient.id!=pk:
+            return HttpResponseRedirect('/patientlogin')
     dischargeDetails=models.PatientDischargeDetails.objects.all().filter(patientId=pk).order_by('-id')[:1]
     dict={
         'patientName':dischargeDetails[0].patientName,
@@ -569,7 +580,7 @@ def doctor_dashboard_view(request):
     #for three cards
     patientcount=models.Patient.objects.all().filter(status=True,assignedDoctorId=request.user.id).count()
     appointmentcount=models.Appointment.objects.all().filter(status=True,doctorId=request.user.id).count()
-    patientdischarged=models.PatientDischargeDetails.objects.all().distinct().filter(assignedDoctorName=request.user.first_name).count()
+    patientdischarged=models.PatientDischargeDetails.objects.all().distinct().filter(assignedDoctorId=request.user.id).count()
 
     #for  table in doctor dashboard
     appointments=models.Appointment.objects.all().filter(status=True,doctorId=request.user.id).order_by('-id')
@@ -623,7 +634,7 @@ def search_view(request):
 @login_required(login_url='doctorlogin')
 @user_passes_test(is_doctor)
 def doctor_view_discharge_patient_view(request):
-    dischargedpatients=models.PatientDischargeDetails.objects.all().distinct().filter(assignedDoctorName=request.user.first_name)
+    dischargedpatients=models.PatientDischargeDetails.objects.all().distinct().filter(assignedDoctorId=request.user.id)
     doctor=models.Doctor.objects.get(user_id=request.user.id) #for profile picture of doctor in sidebar
     return render(request,'hospital/doctor_view_discharge_patient.html',{'dischargedpatients':dischargedpatients,'doctor':doctor})
 
@@ -669,6 +680,8 @@ def doctor_delete_appointment_view(request):
 @user_passes_test(is_doctor)
 def delete_appointment_view(request,pk):
     appointment=models.Appointment.objects.get(id=pk)
+    if appointment.doctorId!=request.user.id:
+        return redirect('doctor-delete-appointment')
     appointment.delete()
     doctor=models.Doctor.objects.get(user_id=request.user.id) #for profile picture of doctor in sidebar
     appointments=models.Appointment.objects.all().filter(status=True,doctorId=request.user.id)
@@ -746,6 +759,8 @@ def patient_book_appointment_view(request):
 
 
 
+@login_required(login_url='patientlogin')
+@user_passes_test(is_patient)
 def patient_view_doctor_view(request):
     doctors=models.Doctor.objects.all().filter(status=True)
     patient=models.Patient.objects.get(user_id=request.user.id) #for profile picture of patient in sidebar
@@ -753,6 +768,8 @@ def patient_view_doctor_view(request):
 
 
 
+@login_required(login_url='patientlogin')
+@user_passes_test(is_patient)
 def search_doctor_view(request):
     patient=models.Patient.objects.get(user_id=request.user.id) #for profile picture of patient in sidebar
     
