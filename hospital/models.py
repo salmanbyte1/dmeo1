@@ -61,6 +61,7 @@ class Appointment(models.Model):
 class PatientDischargeDetails(models.Model):
     patientId=models.PositiveIntegerField(null=True)
     patientName=models.CharField(max_length=40)
+    assignedDoctorId=models.PositiveIntegerField(null=True)
     assignedDoctorName=models.CharField(max_length=40)
     address = models.CharField(max_length=40)
     mobile = models.CharField(max_length=20,null=True)
